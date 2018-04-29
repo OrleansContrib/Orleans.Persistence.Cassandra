@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RuleSet Name="NuClear" ToolsVersion="15.0">
+    <Rules AnalyzerId="StyleCop.Analyzers" RuleNamespace="StyleCop.Analyzers">
+        <Rule Id="SA0001" Action="None" /> <!-- SA0001XmlCommentAnalysisDisabled -->
+        <Rule Id="SA1101" Action="None" /> <!-- SA1101PrefixLocalCallsWithThis -->
+        <Rule Id="SA1116" Action="None" /> <!-- SA1116SplitParametersMustStartOnLineAfterDeclaration -->
+        <Rule Id="SA1118" Action="None" /> <!-- SA1118ParameterMustNotSpanMultipleLines -->
+        <Rule Id="SA1126" Action="None" /> <!-- SA1126PrefixCallsCorrectly, omitted -->
+        <Rule Id="SA1127" Action="None" /> <!-- SA1127GenericTypeConstraintsMustBeOnOwnLine -->
+        <Rule Id="SA1128" Action="None" /> <!-- SA1128ConstructorInitializerMustBeOnOwnLine -->
+        <Rule Id="SA1133" Action="None" /> <!-- SA1133DoNotCombineAttributes -->
+        <Rule Id="SA1200" Action="None" /> <!-- SA1200UsingDirectivesMustBePlacedCorrectly -->
+        <Rule Id="SA1201" Action="None" /> <!-- SA1201ElementsMustAppearInTheCorrectOrder -->
+        <Rule Id="SA1303" Action="None" /> <!-- SA1303ConstFieldNamesMustBeginWithUpperCaseLetter -->
+        <Rule Id="SA1309" Action="None" /> <!-- SA1309FieldNamesMustNotBeginWithUnderscore -->
+        <Rule Id="SA1407" Action="None" /> <!-- SA1407ArithmeticExpressionsMustDeclarePrecedence -->
+        <Rule Id="SA1408" Action="None" /> <!-- SA1408ConditionalExpressionsMustDeclarePrecedence -->
+        <Rule Id="SA1413" Action="None" /> <!-- SA1413UseTrailingCommasInMultiLineInitializers -->
+        <Rule Id="SA1516" Action="None" /> <!-- SA1516ElementsMustBeSeparatedByBlankLine -->
+        <!-- Documentation Rules -->
+        <Rule Id="SA1600" Action="None" /> 
+        <Rule Id="SA1601" Action="None" /> 
+        <Rule Id="SA1602" Action="None" /> 
+        <Rule Id="SA1603" Action="None" /> 
+        <Rule Id="SA1604" Action="None" /> 
+        <Rule Id="SA1605" Action="None" /> 
+        <Rule Id="SA1606" Action="None" /> 
+        <Rule Id="SA1607" Action="None" /> 
+        <Rule Id="SA1608" Action="None" /> 
+        <Rule Id="SA1609" Action="None" /> 
+        <Rule Id="SA1610" Action="None" /> 
+        <Rule Id="SA1611" Action="None" /> 
+        <Rule Id="SA1612" Action="None" /> 
+        <Rule Id="SA1613" Action="None" /> 
+        <Rule Id="SA1614" Action="None" /> 
+        <Rule Id="SA1615" Action="None" /> 
+        <Rule Id="SA1616" Action="None" /> 
+        <Rule Id="SA1617" Action="None" /> 
+        <Rule Id="SA1618" Action="None" /> 
+        <Rule Id="SA1619" Action="None" /> 
+        <Rule Id="SA1620" Action="None" /> 
+        <Rule Id="SA1621" Action="None" /> 
+        <Rule Id="SA1622" Action="None" /> 
+        <Rule Id="SA1623" Action="None" /> 
+        <Rule Id="SA1624" Action="None" /> 
+        <Rule Id="SA1625" Action="None" /> 
+        <Rule Id="SA1626" Action="None" /> 
+        <Rule Id="SA1627" Action="None" /> 
+        <Rule Id="SA1628" Action="None" /> 
+        <Rule Id="SA1629" Action="None" /> 
+        <Rule Id="SA1630" Action="None" /> 
+        <Rule Id="SA1631" Action="None" /> 
+        <Rule Id="SA1632" Action="None" /> 
+        <Rule Id="SA1633" Action="None" /> 
+        <Rule Id="SA1634" Action="None" /> 
+        <Rule Id="SA1635" Action="None" /> 
+        <Rule Id="SA1636" Action="None" /> 
+        <Rule Id="SA1637" Action="None" /> 
+        <Rule Id="SA1638" Action="None" /> 
+        <Rule Id="SA1639" Action="None" /> 
+        <Rule Id="SA1640" Action="None" /> 
+        <Rule Id="SA1641" Action="None" /> 
+        <Rule Id="SA1642" Action="None" /> 
+        <Rule Id="SA1643" Action="None" /> 
+        <Rule Id="SA1644" Action="None" /> 
+        <Rule Id="SA1645" Action="None" /> 
+        <Rule Id="SA1646" Action="None" /> 
+        <Rule Id="SA1647" Action="None" /> 
+        <Rule Id="SA1648" Action="None" /> 
+        <Rule Id="SA1649" Action="None" /> 
+        <Rule Id="SA1650" Action="None" /> 
+        <Rule Id="SA1651" Action="None" /> 
+        <Rule Id="SA1652" Action="None" /> 
+    </Rules>
+</RuleSet>
