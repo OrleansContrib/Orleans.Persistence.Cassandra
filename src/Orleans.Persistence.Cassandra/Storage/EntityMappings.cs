@@ -4,7 +4,7 @@ using Orleans.Persistence.Cassandra.Models;
 
 namespace Orleans.Persistence.Cassandra.Storage
 {
-    internal class EntityMappings : Mappings
+    internal sealed class EntityMappings : Mappings
     {
         public EntityMappings(string tableName)
         {

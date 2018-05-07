@@ -23,9 +23,9 @@ namespace Orleans.Persistence.Cassandra.Options
         public string TableName { get; set; } = "grain_state";
         public int ReplicationFactor { get; set; } = 3;
 
-        public SerializationOptions Serialization { get; set; } = new SerializationOptions();
+        public JsonSerializationOptions JsonSerialization { get; set; } = new JsonSerializationOptions();
 
-        public class SerializationOptions
+        public class JsonSerializationOptions
         {
             public bool UseFullAssemblyNames { get; set; }
             public bool IndentJson { get; set; }

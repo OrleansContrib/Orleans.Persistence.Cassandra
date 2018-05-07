@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using Orleans.Persistence.Cassandra.Concurrency;
-
-namespace Orleans.Persistence.Cassandra
+namespace Orleans.Persistence.Cassandra.Concurrency
 {
     public sealed class NullConcurrentGrainStateTypesProvider : IConcurrentGrainStateTypesProvider
     {

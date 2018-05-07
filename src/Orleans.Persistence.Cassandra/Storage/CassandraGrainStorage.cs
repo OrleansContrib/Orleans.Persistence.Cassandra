@@ -272,14 +272,14 @@ namespace Orleans.Persistence.Cassandra.Storage
             try
             {
                 _jsonSettings = OrleansJsonSerializer.GetDefaultSerializerSettings(_typeResolver, _grainFactory);
-                _jsonSettings.TypeNameHandling = _cassandraStorageOptions.Serialization.TypeNameHandling;
-                _jsonSettings.MetadataPropertyHandling = _cassandraStorageOptions.Serialization.MetadataPropertyHandling;
-                if (_cassandraStorageOptions.Serialization.UseFullAssemblyNames)
+                _jsonSettings.TypeNameHandling = _cassandraStorageOptions.JsonSerialization.TypeNameHandling;
+                _jsonSettings.MetadataPropertyHandling = _cassandraStorageOptions.JsonSerialization.MetadataPropertyHandling;
+                if (_cassandraStorageOptions.JsonSerialization.UseFullAssemblyNames)
                 {
                     _jsonSettings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full;
                 }
 
-                if (_cassandraStorageOptions.Serialization.IndentJson)
+                if (_cassandraStorageOptions.JsonSerialization.IndentJson)
                 {
                     _jsonSettings.Formatting = Formatting.Indented;
                 }
