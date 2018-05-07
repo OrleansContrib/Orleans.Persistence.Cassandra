@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,10 +11,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using Newtonsoft.Json;
+
 using Orleans.Configuration;
 using Orleans.Persistence.Cassandra.Models;
 using Orleans.Persistence.Cassandra.Options;
 using Orleans.Runtime;
+using Orleans.Serialization;
 using Orleans.Storage;
 
 namespace Orleans.Persistence.Cassandra.Storage
@@ -26,78 +28,143 @@ namespace Orleans.Persistence.Cassandra.Storage
         private readonly string _serviceId;
         private readonly CassandraStorageOptions _cassandraStorageOptions;
         private readonly ILogger<CassandraGrainStorage> _logger;
+        private readonly IGrainFactory _grainFactory;
+        private readonly ITypeResolver _typeResolver;
 
-        private Table<GrainState> _dataTable;
+        private JsonSerializerSettings _jsonSettings;
+        private Table<CassandraGrainState> _dataTable;
         private Mapper _mapper;
 
         public CassandraGrainStorage(
             string name,
             CassandraStorageOptions cassandraStorageOptions,
             IOptions<ClusterOptions> clusterOptions,
-            ILogger<CassandraGrainStorage> logger)
+            ILogger<CassandraGrainStorage> logger,
+            IGrainFactory grainFactory,
+            ITypeResolver typeResolver)
         {
             _name = name;
             _serviceId = clusterOptions.Value.ServiceId;
             _cassandraStorageOptions = cassandraStorageOptions;
             _logger = logger;
+            _grainFactory = grainFactory;
+            _typeResolver = typeResolver;
         }
 
         public async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
-            var (_, state) = await GetGrainState(grainType, grainReference);
-            if (state != null)
+            var (_, cassandraState) = await GetCassandraGrainState(grainType, grainReference);
+            if (cassandraState != null)
             {
-                grainState.State = state.State;
-                grainState.ETag = state.ETag;
+                grainState.State = JsonConvert.DeserializeObject<object>(cassandraState.State, _jsonSettings);
+                grainState.ETag = cassandraState.ETag;
             }
         }
 
         public async Task WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
-            var (id, state) = await GetGrainState(grainType, grainReference);
+            var (id, cassandraState) = await GetCassandraGrainState(grainType, grainReference);
             var newEtag = 0;
             try
             {
-                if (state == null)
+                var json = JsonConvert.SerializeObject(grainState.State, _jsonSettings);
+
+                if (cassandraState == null)
                 {
-                    state = new GrainState
+                    cassandraState = new CassandraGrainState
                         {
                             Id = id,
                             GrainType = grainType,
-                            State = grainState.State.ToString(),
+                            State = json,
                             ETag = newEtag.ToString()
                         };
 
-                    await _mapper.InsertIfNotExistsAsync(state);
+                    await _mapper.InsertIfNotExistsAsync(cassandraState);
                 }
                 else
                 {
-                    int.TryParse(grainState.ETag, out var currentEtag);
-                    newEtag = currentEtag;
+                    int.TryParse(grainState.ETag, out var stateEtag);
+                    newEtag = stateEtag;
                     newEtag++;
 
-                    state.State = grainState.ToString();
-                    state.ETag = newEtag.ToString();
+                    var appliedInfo =
+                        await _mapper.UpdateIfAsync<CassandraGrainState>(
+                            Cql.New(
+                                   $"SET {nameof(CassandraGrainState.State)} = ?, {nameof(CassandraGrainState.ETag)} = ? " +
+                                   $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ? " +
+                                   $"IF {nameof(CassandraGrainState.ETag)} = ?",
+                                   json,
+                                   newEtag.ToString(),
+                                   id,
+                                   grainType,
+                                   stateEtag.ToString())
+                               .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)));
 
-                    await _mapper.UpdateIfAsync<GrainState>(
-                        Cql.New(
-                               $"WHERE {nameof(GrainState.Id)} = ? AND {nameof(GrainState.GrainType)} = ? IF {nameof(GrainState.ETag)} = ?",
-                               state.Id,
-                               grainType,
-                               currentEtag)
-                           .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)));
+                    if (!appliedInfo.Applied)
+                    {
+                        throw new CassandraConcurrencyException(cassandraState.Id, stateEtag.ToString(), appliedInfo.Existing.ETag);
+                    }
                 }
+
+                grainState.ETag = newEtag.ToString();
             }
-            catch (Exception)
+            catch (DriverException)
             {
                 _logger.LogWarning("Cassandra driver error occured while creating grain state for grain {grainId}.", id);
                 throw;
             }
         }
 
-        public Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+        public async Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
-            throw new NotImplementedException();
+            var (id, _) = await GetCassandraGrainState(grainType, grainReference);
+            try
+            {
+                if (_cassandraStorageOptions.DeleteStateOnClear)
+                {
+                    await _mapper.DeleteAsync<CassandraGrainState>(
+                        Cql.New(
+                               $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ?",
+                               id,
+                               grainType)
+                           .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)));
+
+                    grainState.ETag = string.Empty;
+                }
+                else
+                {
+                    var json = JsonConvert.SerializeObject(grainState.State, _jsonSettings);
+
+                    int.TryParse(grainState.ETag, out var stateEtag);
+                    var newEtag = stateEtag;
+                    newEtag++;
+
+                    var appliedInfo =
+                        await _mapper.UpdateIfAsync<CassandraGrainState>(
+                            Cql.New(
+                                   $"SET {nameof(CassandraGrainState.State)} = ?, {nameof(CassandraGrainState.ETag)} = ? " +
+                                   $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ? " +
+                                   $"IF {nameof(CassandraGrainState.ETag)} = ?",
+                                   json,
+                                   newEtag.ToString(),
+                                   id,
+                                   grainType,
+                                   stateEtag.ToString())
+                               .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)));
+
+                    if (!appliedInfo.Applied)
+                    {
+                        throw new CassandraConcurrencyException(id, stateEtag.ToString(), appliedInfo.Existing.ETag);
+                    }
+
+                    grainState.ETag = newEtag.ToString();
+                }
+            }
+            catch (DriverException)
+            {
+                _logger.LogWarning("Cassandra driver error occured while clearing grain state for grain {grainId}.", id);
+                throw;
+            }
         }
 
         public void Participate(ISiloLifecycle lifecycle)
@@ -107,14 +174,14 @@ namespace Orleans.Persistence.Cassandra.Storage
 
         private string GetKeyString(GrainReference grainReference) => $"{_serviceId}_{grainReference.ToKeyString()}";
 
-        private async Task<(string, GrainState)> GetGrainState(string grainType, GrainReference grainReference)
+        private async Task<(string, CassandraGrainState)> GetCassandraGrainState(string grainType, GrainReference grainReference)
         {
             var id = GetKeyString(grainReference);
             try
             {
-                var state = await _mapper.SingleOrDefaultAsync<GrainState>(
+                var state = await _mapper.SingleOrDefaultAsync<CassandraGrainState>(
                                              Cql.New(
-                                                    $"WHERE {nameof(GrainState.Id)} = ? AND {nameof(GrainState.GrainType)} = ?",
+                                                    $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ?",
                                                     id,
                                                     grainType)
                                                 .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)))
@@ -133,6 +200,20 @@ namespace Orleans.Persistence.Cassandra.Storage
         {
             try
             {
+
+                _jsonSettings = OrleansJsonSerializer.GetDefaultSerializerSettings(_typeResolver, _grainFactory);
+                _jsonSettings.TypeNameHandling = _cassandraStorageOptions.Serialization.TypeNameHandling;
+                _jsonSettings.MetadataPropertyHandling = _cassandraStorageOptions.Serialization.MetadataPropertyHandling;
+                if (_cassandraStorageOptions.Serialization.UseFullAssemblyNames)
+                {
+                    _jsonSettings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full;
+                }
+
+                if (_cassandraStorageOptions.Serialization.IndentJson)
+                {
+                    _jsonSettings.Formatting = Formatting.Indented;
+                }
+
                 var cassandraOptions = _cassandraStorageOptions;
                 var cassandraCluster =
                     Cluster.Builder()
@@ -149,7 +230,7 @@ namespace Orleans.Persistence.Cassandra.Storage
 
                 var mappingConfiguration = new MappingConfiguration().Define(new EntityMappings(cassandraOptions.TableName));
 
-                _dataTable = new Table<GrainState>(session, mappingConfiguration);
+                _dataTable = new Table<CassandraGrainState>(session, mappingConfiguration);
                 await Task.Run(() => _dataTable.CreateIfNotExists(), cancellationToken);
 
                 _mapper = new Mapper(session, mappingConfiguration);

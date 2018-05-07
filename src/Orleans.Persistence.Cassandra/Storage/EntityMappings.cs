@@ -8,7 +8,7 @@ namespace Orleans.Persistence.Cassandra.Storage
     {
         public EntityMappings(string tableName)
         {
-            For<GrainState>()
+            For<CassandraGrainState>()
                 .TableName(tableName)
                 .PartitionKey(x => x.Id, x => x.GrainType);
         }

@@ -1,6 +1,6 @@
 ﻿namespace Orleans.Persistence.Cassandra.Models
 {
-    internal sealed class GrainState
+    internal sealed class CassandraGrainState
     {
         public string Id { get; set; }
         public string GrainType { get; set; }
