@@ -24,6 +24,8 @@ namespace Orleans.Persistence.Cassandra.Storage
 {
     internal sealed class CassandraGrainStorage : IGrainStorage, ILifecycleParticipant<ISiloLifecycle>
     {
+        private const ConsistencyLevel SerialConsistencyLevel = ConsistencyLevel.Serial;
+
         private readonly string _name;
         private readonly string _serviceId;
         private readonly CassandraStorageOptions _cassandraStorageOptions;
@@ -89,16 +91,17 @@ namespace Orleans.Persistence.Cassandra.Storage
 
                     var appliedInfo =
                         await _mapper.UpdateIfAsync<CassandraGrainState>(
-                            Cql.New(
-                                   $"SET {nameof(CassandraGrainState.State)} = ?, {nameof(CassandraGrainState.ETag)} = ? " +
-                                   $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ? " +
-                                   $"IF {nameof(CassandraGrainState.ETag)} = ?",
-                                   json,
-                                   newEtag.ToString(),
-                                   id,
-                                   grainType,
-                                   stateEtag.ToString())
-                               .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)));
+                                         Cql.New(
+                                                $"SET {nameof(CassandraGrainState.State)} = ?, {nameof(CassandraGrainState.ETag)} = ? " +
+                                                $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ? " +
+                                                $"IF {nameof(CassandraGrainState.ETag)} = ?",
+                                                json,
+                                                newEtag.ToString(),
+                                                id,
+                                                grainType,
+                                                stateEtag.ToString())
+                                            .WithOptions(x => x.SetSerialConsistencyLevel(SerialConsistencyLevel)))
+                                     .ConfigureAwait(false);
 
                     if (!appliedInfo.Applied)
                     {
@@ -123,11 +126,12 @@ namespace Orleans.Persistence.Cassandra.Storage
                 if (_cassandraStorageOptions.DeleteStateOnClear)
                 {
                     await _mapper.DeleteAsync<CassandraGrainState>(
-                        Cql.New(
-                               $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ?",
-                               id,
-                               grainType)
-                           .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)));
+                                     Cql.New(
+                                            $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ?",
+                                            id,
+                                            grainType)
+                                        .WithOptions(x => x.SetSerialConsistencyLevel(SerialConsistencyLevel)))
+                                 .ConfigureAwait(false);
 
                     grainState.ETag = string.Empty;
                 }
@@ -141,16 +145,17 @@ namespace Orleans.Persistence.Cassandra.Storage
 
                     var appliedInfo =
                         await _mapper.UpdateIfAsync<CassandraGrainState>(
-                            Cql.New(
-                                   $"SET {nameof(CassandraGrainState.State)} = ?, {nameof(CassandraGrainState.ETag)} = ? " +
-                                   $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ? " +
-                                   $"IF {nameof(CassandraGrainState.ETag)} = ?",
-                                   json,
-                                   newEtag.ToString(),
-                                   id,
-                                   grainType,
-                                   stateEtag.ToString())
-                               .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)));
+                                         Cql.New(
+                                                $"SET {nameof(CassandraGrainState.State)} = ?, {nameof(CassandraGrainState.ETag)} = ? " +
+                                                $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ? " +
+                                                $"IF {nameof(CassandraGrainState.ETag)} = ?",
+                                                json,
+                                                newEtag.ToString(),
+                                                id,
+                                                grainType,
+                                                stateEtag.ToString())
+                                            .WithOptions(x => x.SetSerialConsistencyLevel(SerialConsistencyLevel)))
+                                     .ConfigureAwait(false);
 
                     if (!appliedInfo.Applied)
                     {
@@ -168,9 +173,7 @@ namespace Orleans.Persistence.Cassandra.Storage
         }
 
         public void Participate(ISiloLifecycle lifecycle)
-        {
-            lifecycle.Subscribe(OptionFormattingUtilities.Name<CassandraGrainStorage>(_name), _cassandraStorageOptions.InitStage, Init, Close);
-        }
+            => lifecycle.Subscribe(OptionFormattingUtilities.Name<CassandraGrainStorage>(_name), _cassandraStorageOptions.InitStage, Init, Close);
 
         private string GetKeyString(GrainReference grainReference) => $"{_serviceId}_{grainReference.ToKeyString()}";
 
@@ -179,17 +182,17 @@ namespace Orleans.Persistence.Cassandra.Storage
             var id = GetKeyString(grainReference);
             try
             {
-                var state = await _mapper.SingleOrDefaultAsync<CassandraGrainState>(
+                var state = await _mapper.FirstOrDefaultAsync<CassandraGrainState>(
                                              Cql.New(
                                                     $"WHERE {nameof(CassandraGrainState.Id)} = ? AND {nameof(CassandraGrainState.GrainType)} = ?",
                                                     id,
                                                     grainType)
-                                                .WithOptions(x => x.SetSerialConsistencyLevel(ConsistencyLevel.Serial)))
+                                                .WithOptions(x => x.SetSerialConsistencyLevel(SerialConsistencyLevel)))
                                          .ConfigureAwait(false);
 
                 return (id, state);
             }
-            catch (Exception)
+            catch (DriverException)
             {
                 _logger.LogWarning("Cassandra driver error occured while reading grain state for grain {grainId}.", id);
                 throw;
@@ -231,7 +234,7 @@ namespace Orleans.Persistence.Cassandra.Storage
                 var mappingConfiguration = new MappingConfiguration().Define(new EntityMappings(cassandraOptions.TableName));
 
                 _dataTable = new Table<CassandraGrainState>(session, mappingConfiguration);
-                await Task.Run(() => _dataTable.CreateIfNotExists(), cancellationToken);
+                await Task.Run(() => _dataTable.CreateIfNotExists(), cancellationToken).ConfigureAwait(false);
 
                 _mapper = new Mapper(session, mappingConfiguration);
             }
