@@ -296,7 +296,7 @@ namespace Orleans.Persistence.Cassandra.Storage
                 var cassandraOptions = _cassandraStorageOptions;
                 var cassandraCluster =
                     Cluster.Builder()
-                           .AddContactPoints(cassandraOptions.ContactPoints)
+                           .AddContactPoints(cassandraOptions.ContactPoints.Split(','))
                            .WithDefaultKeyspace(cassandraOptions.Keyspace)
                            .Build();
 

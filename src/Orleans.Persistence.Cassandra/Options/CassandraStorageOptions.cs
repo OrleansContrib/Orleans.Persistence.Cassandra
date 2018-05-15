@@ -18,7 +18,7 @@ namespace Orleans.Persistence.Cassandra.Options
         /// </summary>
         public bool DeleteStateOnClear { get; set; } = false;
 
-        public IEnumerable<string> ContactPoints { get; set; }
+        public string ContactPoints { get; set; }
         public string Keyspace { get; set; } = "orleans";
         public string TableName { get; set; } = "grain_state";
         public int ReplicationFactor { get; set; } = 3;
