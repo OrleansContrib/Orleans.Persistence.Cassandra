@@ -47,7 +47,8 @@ namespace Orleans.Persistence.Cassandra.Storage
             ILogger<CassandraGrainStorage> logger,
             IGrainFactory grainFactory,
             ITypeResolver typeResolver,
-            IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider)
+            IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider,
+            ILoggerProvider loggerProvider)
         {
             _name = name;
             _serviceId = clusterOptions.Value.ServiceId;
@@ -56,6 +57,14 @@ namespace Orleans.Persistence.Cassandra.Storage
             _grainFactory = grainFactory;
             _typeResolver = typeResolver;
             _concurrentStateTypes = new HashSet<Type>(concurrentGrainStateTypesProvider.GetGrainStateTypes());
+
+            Diagnostics.CassandraPerformanceCountersEnabled = _cassandraStorageOptions.Diagnostics.PerformanceCountersEnabled;
+            Diagnostics.CassandraStackTraceIncluded = _cassandraStorageOptions.Diagnostics.StackTraceIncluded;
+
+            if (loggerProvider != null)
+            {
+                Diagnostics.AddLoggerProvider(loggerProvider);
+            }
         }
 
         public async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)

@@ -1,5 +1,6 @@
 ﻿using System;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -16,6 +17,41 @@ namespace Orleans.Persistence.Cassandra
 {
     public static class StorageExtensions
     {
+        /// <summary>
+        /// Configure silo to use Cassandra storage as the default grain storage.
+        /// </summary>
+        public static ISiloHostBuilder AddCassandraGrainStorageAsDefault(
+            this ISiloHostBuilder builder,
+            Func<IConfiguration, IConfiguration> configurationProvider,
+            IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
+        {
+            return builder.ConfigureServices((context, services) =>
+                                                 {
+                                                     services.AddCassandraGrainStorage(
+                                                         ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME,
+                                                         ob => ob.Bind(configurationProvider(context.Configuration)),
+                                                         concurrentGrainStateTypesProvider);
+                                                 });
+        }
+
+        /// <summary>
+        /// Configure silo to use Cassandra storage for grain storage.
+        /// </summary>
+        public static ISiloHostBuilder AddCassandraGrainStorage(
+            this ISiloHostBuilder builder,
+            string name,
+            Func<IConfiguration, IConfiguration> configurationProvider,
+            IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
+        {
+            return builder.ConfigureServices((context, services) =>
+                                                 {
+                                                     services.AddCassandraGrainStorage(
+                                                         name,
+                                                         ob => ob.Bind(configurationProvider(context.Configuration)),
+                                                         concurrentGrainStateTypesProvider);
+                                                 });
+        }
+
         /// <summary>
         /// Configure silo to use Cassandra storage as the default grain storage.
         /// </summary>

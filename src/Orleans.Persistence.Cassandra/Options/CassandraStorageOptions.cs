@@ -25,12 +25,20 @@ namespace Orleans.Persistence.Cassandra.Options
 
         public JsonSerializationOptions JsonSerialization { get; set; } = new JsonSerializationOptions();
 
+        public DiagnosticsOptions Diagnostics { get; set; } = new DiagnosticsOptions();
+
         public class JsonSerializationOptions
         {
             public bool UseFullAssemblyNames { get; set; }
             public bool IndentJson { get; set; }
             public TypeNameHandling TypeNameHandling { get; set; } = TypeNameHandling.All;
             public MetadataPropertyHandling MetadataPropertyHandling { get; set; } = MetadataPropertyHandling.ReadAhead;
+        }
+
+        public class DiagnosticsOptions
+        {
+            public bool PerformanceCountersEnabled { get; set; }
+            public bool StackTraceIncluded { get; set; }
         }
     }
 }
