@@ -114,5 +114,5 @@ if ($LASTEXITCODE ){ Exit $LASTEXITCODE }
 if ($LASTEXITCODE ){ Exit $LASTEXITCODE }
 
 Write-Host "Packaging projects"
-dotnet pack ./src/Orleans.Clustering.Cassandra/ -c Release --output ../../artifacts --no-build  /p:packageversion=$version
+dotnet pack ./src/Orleans.Persistence.Cassandra/ -c Release --output ../../artifacts --no-build  /p:packageversion=$version
 if ($LASTEXITCODE ){ Exit $LASTEXITCODE }
