@@ -2,6 +2,13 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orleans.Persistence.Cassandra", "src/Orleans.Persistence.Cassandra/Orleans.Persistence.Cassandra.csproj", "{CE236835-013D-4939-B527-8A3ED969AD58}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{55E3D561-868C-439F-B1F7-1F80F0E191BF}"
+ProjectSection(SolutionItems) = preProject
+	appveyor.yml = appveyor.yml
+	build\build.cmd = build\build.cmd
+	build\build.ps1 = build\build.ps1
+EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
