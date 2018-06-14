@@ -1,0 +1,155 @@
+variables:
+  REGISTRY: "docker-hub.2gis.ru"
+
+stages:
+  - pre
+  - dockerize
+  - deploy
+  - end
+
+before_script:
+  - export BROADWAY_VERSION=`[[ -z ${CI_COMMIT_TAG} ]] && echo "branch-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHA:0:8}" || echo "${CI_COMMIT_TAG}"`
+  - export ENVIRONMENT_KEYSPACE=`echo "branch_${CI_COMMIT_REF_SLUG}" | sed -e 's/-/_/g'`
+
+# ================= Build & Test =================
+
+build-apps:
+  stage: pre
+  when: always
+  image: $REGISTRY/microsoft/dotnet:2.1.300-sdk-alpine3.7
+  script:
+    - dotnet restore --runtime ubuntu.14.04-x64
+    - dotnet publish src/Broadway.Host --configuration Release --runtime ubuntu.14.04-x64 --output ../../publish/broadway-host
+    - cp certs/2GIS_Root_Certificate_Authority_v2.crt publish/broadway-host/
+    - dotnet publish src/Broadway.Silo --configuration Release --runtime ubuntu.14.04-x64 --output ../../publish/broadway-silo
+    - cp certs/2GIS_Root_Certificate_Authority_v2.crt publish/broadway-silo/
+  tags: [ 2gis, docker ]
+  artifacts:
+    name: "${CI_COMMIT_REF_NAME}_app"
+    expire_in: '1 week'
+    paths:
+      - publish/broadway-host/
+      - publish/broadway-silo/
+
+# ================= Dockerize =================
+
+broadway-host-image:
+  stage: dockerize
+#  when: manual
+  allow_failure: false
+  script:
+    - export IMAGE_TAG=$REGISTRY/roads/broadway-host:${BROADWAY_VERSION}
+    - docker build --pull --rm --tag $IMAGE_TAG -f publish/broadway-host/Dockerfile publish/broadway-host
+    - docker push $IMAGE_TAG
+  tags: [ docker-engine, io ]
+  dependencies:
+    - build-apps
+
+broadway-silo-image:
+  stage: dockerize
+#  when: manual
+  allow_failure: false
+  script:
+    - export IMAGE_TAG=$REGISTRY/roads/broadway-silo:${BROADWAY_VERSION}
+    - docker build --pull --rm --tag $IMAGE_TAG -f publish/broadway-silo/Dockerfile publish/broadway-silo
+    - docker push $IMAGE_TAG
+  tags: [ docker-engine, io ]
+  dependencies:
+    - build-apps
+
+# ================ Deploy =================
+
+.deploy-testing:template: &deploy_testing_template
+  image: $REGISTRY/2gis-io/k8s-handle:latest
+  stage: deploy
+  when: manual
+  variables:
+    DOMAIN_POSTFIX: "broadway-${CI_COMMIT_REF_SLUG}"
+    ROADS_ENVIRONMENT: stage
+    AIM_AUTHORITY: ${AIM_AUTHORITY_STAGE}
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: "BroadwayDataProjection"
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+  tags: [ 2gis, docker ]
+  dependencies: []
+  except:
+    - master
+    - tags
+
+deploy-staging:
+  stage: deploy
+#  when: manual
+  image: $REGISTRY/2gis-io/k8s-handle:latest
+  variables:
+    DOMAIN_POSTFIX: "broadway-stage"
+    ROADS_ENVIRONMENT: stage
+    AIM_AUTHORITY: ${AIM_AUTHORITY_STAGE}
+    KAFKA_BROKERS: ${KAFKA_BROKERS_STAGE}
+    POSTGRES_HOST: ${POSTGRES_HOST_STAGE}
+    POSTGRES_PORT: ${POSTGRES_PORT_STAGE}
+    POSTGRES_DB: ${POSTGRES_DB_STAGE}
+    POSTGRES_USER: ${POSTGRES_USER_STAGE}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGE}
+  script:
+    - export ENVIRONMENT_KEYSPACE=stage
+    - k8s-handle deploy --config config-prototype.yaml --section deploy-apps --sync-mode true --tries 60 --strict
+  only:
+    - master
+  dependencies: []
+  tags: [ 2gis, docker ]
+  environment:
+    name: stage
+    url: http://broadway-stage.web-staging.2gis.ru/swagger
+
+deploy-testing:
+  <<: *deploy_testing_template
+  script:
+    - k8s-handle deploy --config config-prototype.yaml --section deploy-storage --sync-mode true --tries 120
+    - k8s-handle deploy --config config-prototype.yaml --section deploy-apps --sync-mode true --tries 60
+  environment:
+    name: ${CI_COMMIT_REF_NAME}
+    url: http://broadway-${CI_COMMIT_REF_SLUG}.web-staging.2gis.ru/swagger
+    on_stop: destroy-testing
+
+destroy-testing:
+  <<: *deploy_testing_template
+  script:
+    - k8s-handle destroy --config config-prototype.yaml --section deploy-apps --sync-mode true --tries 60
+    - k8s-handle destroy --config config-prototype.yaml --section deploy-storage --sync-mode true --tries 60
+    - pip install cassandra-driver
+    - python run-cql.py ${CASSANDRA_STAGE_HOST} ${CASSANDRA_STAGE_PORT} "DROP KEYSPACE ${ENVIRONMENT_KEYSPACE}"
+  environment:
+    name: ${CI_COMMIT_REF_NAME}
+    action: stop
+
+# ================= End =================
+
+.cleanup:registry:template: &cleanup_registry_template
+  script:
+    - echo "Tags list for $REGISTRY/$IMAGE:"
+    - hub-tool tags:list $IMAGE | grep "^$TAG_MASK"
+    - hub-tool tags:cleanup --path $IMAGE --regexp "$TAG_MASK*" --days $IMAGE_LIFE_TIME_DAYS
+  tags: [ docker-engine, io ]
+
+cleanup:registry:host:
+  <<: *cleanup_registry_template
+  stage: end
+  when: always
+  variables:
+    GIT_STRATEGY: none
+    IMAGE: roads/broadway-host
+    TAG_MASK: "branch-"
+    IMAGE_LIFE_TIME_DAYS: "7"
+  dependencies: []
+
+cleanup:registry:silo:
+  <<: *cleanup_registry_template
+  stage: end
+  when: always
+  variables:
+    GIT_STRATEGY: none
+    IMAGE: roads/broadway-silo
+    TAG_MASK: "branch-"
+    IMAGE_LIFE_TIME_DAYS: "7"
+  dependencies: []

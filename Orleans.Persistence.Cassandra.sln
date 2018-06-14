@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orleans.Persistence.Cassandra", "Orleans.Persistence.Cassandra.csproj", "{CE236835-013D-4939-B527-8A3ED969AD58}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orleans.Persistence.Cassandra", "src/Orleans.Persistence.Cassandra/Orleans.Persistence.Cassandra.csproj", "{CE236835-013D-4939-B527-8A3ED969AD58}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
