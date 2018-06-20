@@ -37,6 +37,7 @@ namespace Orleans.Persistence.Cassandra.Storage
         private readonly HashSet<Type> _concurrentStateTypes;
 
         private JsonSerializerSettings _jsonSettings;
+        private Cluster _cluster;
         private Table<CassandraGrainState> _dataTable;
         private Mapper _mapper;
 
@@ -283,6 +284,7 @@ namespace Orleans.Persistence.Cassandra.Storage
                 _jsonSettings = OrleansJsonSerializer.GetDefaultSerializerSettings(_typeResolver, _grainFactory);
                 _jsonSettings.TypeNameHandling = _cassandraStorageOptions.JsonSerialization.TypeNameHandling;
                 _jsonSettings.MetadataPropertyHandling = _cassandraStorageOptions.JsonSerialization.MetadataPropertyHandling;
+
                 if (_cassandraStorageOptions.JsonSerialization.UseFullAssemblyNames)
                 {
                     _jsonSettings.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full;
@@ -294,18 +296,27 @@ namespace Orleans.Persistence.Cassandra.Storage
                 }
 
                 var cassandraOptions = _cassandraStorageOptions;
-                var cassandraCluster =
-                    Cluster.Builder()
-                           .AddContactPoints(cassandraOptions.ContactPoints.Split(','))
-                           .WithDefaultKeyspace(cassandraOptions.Keyspace)
-                           .Build();
+                _cluster = Cluster.Builder()
+                                  .AddContactPoints(cassandraOptions.ContactPoints.Split(','))
+                                  .Build();
 
-                var session = cassandraCluster.ConnectAndCreateDefaultKeyspaceIfNotExists(
-                    new Dictionary<string, string>
-                        {
-                            { "class", "SimpleStrategy" },
-                            { "replication_factor", cassandraOptions.ReplicationFactor.ToString() }
-                        });
+                var session = await _cluster.ConnectAsync();
+                await Task.Run(
+                              () =>
+                                  {
+                                      var keyspace = cassandraOptions.Keyspace;
+                                      session.CreateKeyspaceIfNotExists(
+                                          keyspace,
+                                          new Dictionary<string, string>
+                                              {
+                                                  { "class", "SimpleStrategy" },
+                                                  { "replication_factor", cassandraOptions.ReplicationFactor.ToString() }
+                                              });
+
+                                      session.ChangeKeyspace(keyspace);
+                                  },
+                              cancellationToken)
+                          .ConfigureAwait(false);
 
                 var mappingConfiguration = new MappingConfiguration().Define(new EntityMappings(cassandraOptions.TableName));
 
@@ -321,11 +332,7 @@ namespace Orleans.Persistence.Cassandra.Storage
             }
         }
 
-        private Task Close(CancellationToken cancellationToken)
-        {
-            _dataTable.GetSession().Dispose();
-            return Task.CompletedTask;
-        }
+        private async Task Close(CancellationToken cancellationToken) => await _cluster.ShutdownAsync();
     }
 
     public static class CassandraGrainStorageFactory
