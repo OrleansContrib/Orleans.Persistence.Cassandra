@@ -38,7 +38,6 @@ namespace Orleans.Persistence.Cassandra.Storage
 
         private JsonSerializerSettings _jsonSettings;
         private Cluster _cluster;
-        private Table<CassandraGrainState> _dataTable;
         private Mapper _mapper;
 
         public CassandraGrainStorage(
@@ -312,16 +311,29 @@ namespace Orleans.Persistence.Cassandra.Storage
                                                   { "class", "SimpleStrategy" },
                                                   { "replication_factor", cassandraOptions.ReplicationFactor.ToString() }
                                               });
-
-                                      session.ChangeKeyspace(keyspace);
                                   },
                               cancellationToken)
                           .ConfigureAwait(false);
 
-                var mappingConfiguration = new MappingConfiguration().Define(new EntityMappings(cassandraOptions.TableName));
+                var mappingConfiguration = new MappingConfiguration().Define(new EntityMappings(cassandraOptions.Keyspace, cassandraOptions.TableName));
 
-                _dataTable = new Table<CassandraGrainState>(session, mappingConfiguration);
-                await Task.Run(() => _dataTable.CreateIfNotExists(), cancellationToken).ConfigureAwait(false);
+                await Task.Run(
+                              async () =>
+                                  {
+                                      var grainStateTable = new Table<CassandraGrainState>(session, mappingConfiguration);
+
+                                      var systemTableTable = new Table<CassandraSystemTables>(session, mappingConfiguration);
+                                      var result = await systemTableTable.FirstOrDefault(
+                                                                             t => t.KeyspaceName == grainStateTable.KeyspaceName &&
+                                                                                  t.TableName == grainStateTable.Name)
+                                                                         .ExecuteAsync();
+                                      if (result == null)
+                                      {
+                                          grainStateTable.Create();
+                                      }
+                                  },
+                              cancellationToken)
+                          .ConfigureAwait(false);
 
                 _mapper = new Mapper(session, mappingConfiguration);
             }
