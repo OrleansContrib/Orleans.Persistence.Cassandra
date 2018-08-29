@@ -1,9 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <RuntimeFrameworkVersion Condition=" '$(RuntimeFrameworkVersion)'=='' ">2.0.6</RuntimeFrameworkVersion>
     <OrleansPackageVersion Condition=" '$(OrleansPackageVersion)'=='' ">2.0*</OrleansPackageVersion>
-    <NpgsqlVersion Condition=" '$(NpgsqlVersion)'=='' ">3.2.7</NpgsqlVersion>
   </PropertyGroup>
 
 </Project>

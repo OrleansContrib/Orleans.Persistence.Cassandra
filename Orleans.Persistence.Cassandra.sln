@@ -7,6 +7,7 @@ ProjectSection(SolutionItems) = preProject
 	appveyor.yml = appveyor.yml
 	build\build.cmd = build\build.cmd
 	build\build.ps1 = build\build.ps1
+	Directory.Build.props = Directory.Build.props
 EndProjectSection
 EndProject
 Global
