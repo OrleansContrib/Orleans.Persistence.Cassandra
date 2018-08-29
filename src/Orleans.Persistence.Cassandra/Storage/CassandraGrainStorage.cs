@@ -32,7 +32,7 @@ namespace Orleans.Persistence.Cassandra.Storage
             CqlQueryOptions.New().SetSerialConsistencyLevel(SerialConsistencyLevel);
 
         private static readonly CqlQueryOptions DefaultConsistencyQueryOptions =
-            CqlQueryOptions.New().SetSerialConsistencyLevel(DefaultConsistencyLevel);
+            CqlQueryOptions.New().SetConsistencyLevel(DefaultConsistencyLevel);
 
         private readonly string _name;
         private readonly string _serviceId;
