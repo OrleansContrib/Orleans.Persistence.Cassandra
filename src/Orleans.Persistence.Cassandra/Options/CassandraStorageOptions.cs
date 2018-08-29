@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 namespace Orleans.Persistence.Cassandra.Options
 {
@@ -27,6 +28,7 @@ namespace Orleans.Persistence.Cassandra.Options
 
         public class JsonSerializationOptions
         {
+            public IContractResolver ContractResolver { get; set; }
             public bool UseFullAssemblyNames { get; set; }
             public bool IndentJson { get; set; }
             public TypeNameHandling TypeNameHandling { get; set; } = TypeNameHandling.All;

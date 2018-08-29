@@ -28,6 +28,12 @@ namespace Orleans.Persistence.Cassandra.Storage
         private const ConsistencyLevel SerialConsistencyLevel = ConsistencyLevel.Serial;
         private const ConsistencyLevel DefaultConsistencyLevel = ConsistencyLevel.Quorum;
 
+        private static readonly CqlQueryOptions SerialConsistencyQueryOptions =
+            CqlQueryOptions.New().SetSerialConsistencyLevel(SerialConsistencyLevel);
+
+        private static readonly CqlQueryOptions DefaultConsistencyQueryOptions =
+            CqlQueryOptions.New().SetSerialConsistencyLevel(DefaultConsistencyLevel);
+
         private readonly string _name;
         private readonly string _serviceId;
         private readonly CassandraStorageOptions _cassandraStorageOptions;
@@ -98,7 +104,7 @@ namespace Orleans.Persistence.Cassandra.Storage
                                 ETag = newEtag.ToString()
                             };
 
-                        await _mapper.InsertIfNotExistsAsync(cassandraState, CqlQueryOptions.New().SetSerialConsistencyLevel(SerialConsistencyLevel))
+                        await _mapper.InsertIfNotExistsAsync(cassandraState, SerialConsistencyQueryOptions)
                                      .ConfigureAwait(false);
                     }
                     else
@@ -141,13 +147,13 @@ namespace Orleans.Persistence.Cassandra.Storage
                                 ETag = string.Empty
                             };
 
-                        await _mapper.InsertAsync(cassandraState, CqlQueryOptions.New().SetConsistencyLevel(DefaultConsistencyLevel))
+                        await _mapper.InsertAsync(cassandraState, DefaultConsistencyQueryOptions)
                                      .ConfigureAwait(false);
                     }
                     else
                     {
                         cassandraState.State = json;
-                        await _mapper.UpdateAsync(cassandraState, CqlQueryOptions.New().SetConsistencyLevel(DefaultConsistencyLevel))
+                        await _mapper.UpdateAsync(cassandraState, DefaultConsistencyQueryOptions)
                                      .ConfigureAwait(false);
                     }
                 }
@@ -222,7 +228,7 @@ namespace Orleans.Persistence.Cassandra.Storage
                     else
                     {
                         cassandraState.State = json;
-                        await _mapper.UpdateAsync(cassandraState, CqlQueryOptions.New().SetConsistencyLevel(DefaultConsistencyLevel))
+                        await _mapper.UpdateAsync(cassandraState, DefaultConsistencyQueryOptions)
                                      .ConfigureAwait(false);
                     }
                 }
@@ -283,6 +289,11 @@ namespace Orleans.Persistence.Cassandra.Storage
                 _jsonSettings = OrleansJsonSerializer.GetDefaultSerializerSettings(_typeResolver, _grainFactory);
                 _jsonSettings.TypeNameHandling = _cassandraStorageOptions.JsonSerialization.TypeNameHandling;
                 _jsonSettings.MetadataPropertyHandling = _cassandraStorageOptions.JsonSerialization.MetadataPropertyHandling;
+
+                if (_cassandraStorageOptions.JsonSerialization.ContractResolver != null)
+                {
+                    _jsonSettings.ContractResolver = _cassandraStorageOptions.JsonSerialization.ContractResolver;
+                }
 
                 if (_cassandraStorageOptions.JsonSerialization.UseFullAssemblyNames)
                 {
