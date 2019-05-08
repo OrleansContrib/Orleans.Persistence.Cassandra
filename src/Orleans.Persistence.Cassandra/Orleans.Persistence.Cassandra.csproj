@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CassandraCSharpDriver" Version="3.9.0" />
-    <PackageReference Include="Microsoft.Orleans.Core" Version="2.3.0" />
-    <PackageReference Include="Microsoft.Orleans.Runtime.Abstractions" Version="2.3.0" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="$(OrleansPackageVersion)" />
+    <PackageReference Include="Microsoft.Orleans.Runtime.Abstractions" Version="$(OrleansPackageVersion)" />
   </ItemGroup>
 </Project>
