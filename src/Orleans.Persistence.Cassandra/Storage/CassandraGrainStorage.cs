@@ -26,13 +26,13 @@ namespace Orleans.Persistence.Cassandra.Storage
     internal sealed class CassandraGrainStorage : IGrainStorage, ILifecycleParticipant<ISiloLifecycle>
     {
         private const ConsistencyLevel SerialConsistencyLevel = ConsistencyLevel.Serial;
-        private const ConsistencyLevel DefaultConsistencyLevel = ConsistencyLevel.Quorum;
+        private ConsistencyLevel DefaultConsistencyLevel = ConsistencyLevel.Quorum;
 
         private static readonly CqlQueryOptions SerialConsistencyQueryOptions =
             CqlQueryOptions.New().SetSerialConsistencyLevel(SerialConsistencyLevel);
 
         private static readonly CqlQueryOptions DefaultConsistencyQueryOptions =
-            CqlQueryOptions.New().SetConsistencyLevel(DefaultConsistencyLevel);
+            CqlQueryOptions.New().SetConsistencyLevel(ConsistencyLevel.Quorum);
 
         private readonly string _name;
         private readonly string _serviceId;
@@ -309,6 +309,13 @@ namespace Orleans.Persistence.Cassandra.Storage
                 _cluster = Cluster.Builder()
                                   .AddContactPoints(cassandraOptions.ContactPoints.Split(','))
                                   .Build();
+
+                // when there are less nodes, the driver throws Cassandra.UnavailableExeption with Quorum
+                if (cassandraOptions.ReplicationFactor < 3)
+                {
+                    DefaultConsistencyLevel = ConsistencyLevel.One;
+                    DefaultConsistencyQueryOptions.SetConsistencyLevel(DefaultConsistencyLevel);
+                }
 
                 var session = await _cluster.ConnectAsync();
                 await Task.Run(
