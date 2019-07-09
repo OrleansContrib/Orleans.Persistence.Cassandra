@@ -8,6 +8,7 @@ ProjectSection(SolutionItems) = preProject
 	build\build.cmd = build\build.cmd
 	build\build.ps1 = build\build.ps1
 	Directory.Build.props = Directory.Build.props
+	global.json = global.json
 EndProjectSection
 EndProject
 Global
