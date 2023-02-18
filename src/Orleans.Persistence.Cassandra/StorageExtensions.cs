@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 
 using Orleans.Configuration;
 using Orleans.Hosting;
@@ -21,16 +22,16 @@ namespace Orleans.Persistence.Cassandra
         /// <summary>
         /// Configure silo to use Cassandra storage as the default grain storage.
         /// </summary>
-        public static ISiloHostBuilder AddCassandraGrainStorageAsDefault(
-            this ISiloHostBuilder builder,
-            Func<IConfiguration, IConfiguration> configurationProvider,
+        public static ISiloBuilder AddCassandraGrainStorageAsDefault(
+            this ISiloBuilder builder,
+            Func</*IConfiguration,*/ IConfiguration> configurationProvider,
             IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
         {
-            return builder.ConfigureServices((context, services) =>
+            return builder.ConfigureServices((services) =>
                                                  {
                                                      services.AddCassandraGrainStorage(
                                                          ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME,
-                                                         ob => ob.Bind(configurationProvider(context.Configuration)),
+                                                         ob => ob.Bind(configurationProvider(/*context.Configuration*/)),
                                                          concurrentGrainStateTypesProvider);
                                                  });
         }
@@ -38,17 +39,17 @@ namespace Orleans.Persistence.Cassandra
         /// <summary>
         /// Configure silo to use Cassandra storage for grain storage.
         /// </summary>
-        public static ISiloHostBuilder AddCassandraGrainStorage(
-            this ISiloHostBuilder builder,
+        public static ISiloBuilder AddCassandraGrainStorage(
+            this ISiloBuilder builder,
             string name,
-            Func<IConfiguration, IConfiguration> configurationProvider,
+            Func</*IConfiguration,*/ IConfiguration> configurationProvider,
             IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
         {
-            return builder.ConfigureServices((context, services) =>
+            return builder.ConfigureServices((services) =>
                                                  {
                                                      services.AddCassandraGrainStorage(
                                                          name,
-                                                         ob => ob.Bind(configurationProvider(context.Configuration)),
+                                                         ob => ob.Bind(configurationProvider(/*context.Configuration*/)),
                                                          concurrentGrainStateTypesProvider);
                                                  });
         }
@@ -56,8 +57,8 @@ namespace Orleans.Persistence.Cassandra
         /// <summary>
         /// Configure silo to use Cassandra storage as the default grain storage.
         /// </summary>
-        public static ISiloHostBuilder AddCassandraGrainStorageAsDefault(
-            this ISiloHostBuilder builder,
+        public static ISiloBuilder AddCassandraGrainStorageAsDefault(
+            this ISiloBuilder builder,
             Action<CassandraStorageOptions> configureOptions,
             IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
         {
@@ -67,8 +68,8 @@ namespace Orleans.Persistence.Cassandra
         /// <summary>
         /// Configure silo to use Cassandra storage for grain storage.
         /// </summary>
-        public static ISiloHostBuilder AddCassandraGrainStorage(
-            this ISiloHostBuilder builder,
+        public static ISiloBuilder AddCassandraGrainStorage(
+            this ISiloBuilder builder,
             string name,
             Action<CassandraStorageOptions> configureOptions,
             IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
@@ -79,8 +80,8 @@ namespace Orleans.Persistence.Cassandra
         /// <summary>
         /// Configure silo to use Cassandra storage as the default grain storage.
         /// </summary>
-        public static ISiloHostBuilder AddCassandraGrainStorageAsDefault(
-            this ISiloHostBuilder builder,
+        public static ISiloBuilder AddCassandraGrainStorageAsDefault(
+            this ISiloBuilder builder,
             Action<OptionsBuilder<CassandraStorageOptions>> configureOptions = null,
             IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
         {
@@ -90,8 +91,8 @@ namespace Orleans.Persistence.Cassandra
         /// <summary>
         /// Configure silo to use Cassandra storage for grain storage.
         /// </summary>
-        public static ISiloHostBuilder AddCassandraGrainStorage(
-            this ISiloHostBuilder builder,
+        public static ISiloBuilder AddCassandraGrainStorage(
+            this ISiloBuilder builder,
             string name,
             Action<OptionsBuilder<CassandraStorageOptions>> configureOptions = null,
             IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider = null)
@@ -154,7 +155,8 @@ namespace Orleans.Persistence.Cassandra
             return services
                    .AddSingletonNamedService(name, (sp, n) => concurrentGrainStateTypesProvider ?? new NullConcurrentGrainStateTypesProvider())
                    .AddSingletonNamedService(name, CassandraGrainStorageFactory.Create)
-                   .AddSingletonNamedService(name, (sp, n) => (ILifecycleParticipant<ISiloLifecycle>)sp.GetRequiredServiceByName<IGrainStorage>(n));
+                   .AddSingletonNamedService(name, (sp, n) => (ILifecycleParticipant<ISiloLifecycle>)sp.GetRequiredServiceByName<IGrainStorage>(n))
+                   ;
         }
     }
 }

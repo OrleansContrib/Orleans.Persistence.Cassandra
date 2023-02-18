@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,17 +10,19 @@ using Cassandra.Data.Linq;
 using Cassandra.Mapping;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-
 using Newtonsoft.Json;
 
 using Orleans.Configuration;
+using Orleans.GrainReferences;
 using Orleans.Persistence.Cassandra.Concurrency;
 using Orleans.Persistence.Cassandra.Models;
 using Orleans.Persistence.Cassandra.Options;
 using Orleans.Runtime;
 using Orleans.Serialization;
+using Orleans.Serialization.Buffers;
 using Orleans.Storage;
 
 namespace Orleans.Persistence.Cassandra.Storage
@@ -38,30 +42,33 @@ namespace Orleans.Persistence.Cassandra.Storage
         private readonly string _serviceId;
         private readonly CassandraStorageOptions _cassandraStorageOptions;
         private readonly ILogger<CassandraGrainStorage> _logger;
-        private readonly IGrainFactory _grainFactory;
-        private readonly ITypeResolver _typeResolver;
+        //private readonly IGrainFactory _grainFactory;
+        private readonly IServiceProvider _services;
+        //private readonly ITypeResolver _typeResolver;
         private readonly HashSet<Type> _concurrentStateTypes;
 
         private JsonSerializerSettings _jsonSettings;
         private Cluster _cluster;
         private Mapper _mapper;
-
+                
         public CassandraGrainStorage(
             string name,
             CassandraStorageOptions cassandraStorageOptions,
             IOptions<ClusterOptions> clusterOptions,
             ILogger<CassandraGrainStorage> logger,
             IGrainFactory grainFactory,
-            ITypeResolver typeResolver,
+            //ITypeResolver typeResolver,
             IConcurrentGrainStateTypesProvider concurrentGrainStateTypesProvider,
+            IServiceProvider services,
             ILoggerProvider loggerProvider)
         {
             _name = name;
             _serviceId = clusterOptions.Value.ServiceId;
             _cassandraStorageOptions = cassandraStorageOptions;
             _logger = logger;
-            _grainFactory = grainFactory;
-            _typeResolver = typeResolver;
+            _/*grainFactory*/ = grainFactory;
+            //_typeResolver = typeResolver;
+            _services = services;
             _concurrentStateTypes = new HashSet<Type>(concurrentGrainStateTypesProvider.GetGrainStateTypes());
 
             Diagnostics.CassandraPerformanceCountersEnabled = _cassandraStorageOptions.Diagnostics.PerformanceCountersEnabled;
@@ -73,21 +80,21 @@ namespace Orleans.Persistence.Cassandra.Storage
             }
         }
 
-        public async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+        public async Task ReadStateAsync<T>(string grainType, GrainId grainReference, IGrainState<T> grainState)
         {
             var isConcurrentState = _concurrentStateTypes.Contains(grainState.State.GetType());
             var (_, cassandraState) = await GetCassandraGrainState(grainType, grainReference, isConcurrentState);
             if (cassandraState != null)
             {
-                grainState.State = JsonConvert.DeserializeObject<object>(cassandraState.State, _jsonSettings);
+                grainState.State = JsonConvert.DeserializeObject<T>(cassandraState.State, _jsonSettings);
                 grainState.ETag = isConcurrentState ? cassandraState.ETag : string.Empty;
             }
         }
 
-        public async Task WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+        public async Task WriteStateAsync<T>(string grainType, GrainId grainId, IGrainState<T> grainState)
         {
             var isConcurrentState = _concurrentStateTypes.Contains(grainState.State.GetType());
-            var (id, cassandraState) = await GetCassandraGrainState(grainType, grainReference, isConcurrentState);
+            var (id, cassandraState) = await GetCassandraGrainState(grainType, grainId, isConcurrentState);
             try
             {
                 var json = JsonConvert.SerializeObject(grainState.State, _jsonSettings);
@@ -109,7 +116,8 @@ namespace Orleans.Persistence.Cassandra.Storage
                     }
                     else
                     {
-                        int.TryParse(grainState.ETag, out var stateEtag);
+                        if( !int.TryParse(grainState.ETag, out var stateEtag))
+                            stateEtag = 0;
                         newEtag = stateEtag;
                         newEtag++;
 
@@ -161,12 +169,11 @@ namespace Orleans.Persistence.Cassandra.Storage
             catch (DriverException)
             {
                 _logger.LogWarning("Cassandra driver error occured while creating grain state for grain {grainId}.", id);
-
                 throw;
             }
         }
 
-        public async Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+        public async Task ClearStateAsync<T>(string grainType, GrainId grainReference, IGrainState<T> grainState)
         {
             var isConcurrentState = _concurrentStateTypes.Contains(grainState.State.GetType());
             var (id, cassandraState) = await GetCassandraGrainState(grainType, grainReference, isConcurrentState);
@@ -200,7 +207,8 @@ namespace Orleans.Persistence.Cassandra.Storage
                     var json = JsonConvert.SerializeObject(grainState.State, _jsonSettings);
                     if (isConcurrentState)
                     {
-                        int.TryParse(grainState.ETag, out var stateEtag);
+                        if(!int.TryParse(grainState.ETag, out var stateEtag))
+                            stateEtag = 0;
                         var newEtag = stateEtag;
                         newEtag++;
 
@@ -243,11 +251,11 @@ namespace Orleans.Persistence.Cassandra.Storage
         public void Participate(ISiloLifecycle lifecycle)
             => lifecycle.Subscribe(OptionFormattingUtilities.Name<CassandraGrainStorage>(_name), _cassandraStorageOptions.InitStage, Init, Close);
 
-        private string GetKeyString(GrainReference grainReference) => $"{_serviceId}_{grainReference.ToKeyString()}";
+        private string GetKeyString(GrainId grainId) => $"{_serviceId}_{grainId}";
 
         private async Task<(string, CassandraGrainState)> GetCassandraGrainState(
             string grainType,
-            GrainReference grainReference,
+            GrainId grainReference,
             bool isConcurrentState)
         {
             var id = GetKeyString(grainReference);
@@ -286,9 +294,34 @@ namespace Orleans.Persistence.Cassandra.Storage
         {
             try
             {
-                _jsonSettings = OrleansJsonSerializer.GetDefaultSerializerSettings(_typeResolver, _grainFactory);
+                _jsonSettings = OrleansJsonSerializerSettings.GetDefaultSerializerSettings(_services/*_typeResolver, _grainFactory*/);
                 _jsonSettings.TypeNameHandling = _cassandraStorageOptions.JsonSerialization.TypeNameHandling;
                 _jsonSettings.MetadataPropertyHandling = _cassandraStorageOptions.JsonSerialization.MetadataPropertyHandling;
+
+                // clear and fill again to work around "Unable to cast object ... to type 'Orleans.Runtime.GrainReference'."
+                //    bei Orleans.Serialization.GrainReferenceJsonConverter.WriteJson(JsonWriter writer, Object value, JsonSerializer serializer)
+                //    bei Newtonsoft.Json.Serialization.JsonSerializerInternalWriter.SerializeConvertable(JsonWriter writer, JsonConverter converter, Object value, JsonContract contract, JsonContainerContract collectionContract, JsonProperty containerProperty)
+                //    bei Newtonsoft.Json.Serialization.JsonSerializerInternalWriter.SerializeValue(JsonWriter writer, Object value, JsonContract valueContract, JsonProperty member, JsonContainerContract containerContract, JsonProperty containerProperty)
+                //    bei Newtonsoft.Json.Serialization.JsonSerializerInternalWriter.SerializeObject(JsonWriter writer, Object value, JsonObjectContract contract, JsonProperty member, JsonContainerContract collectionContract, JsonProperty containerProperty)
+                //    bei Newtonsoft.Json.Serialization.JsonSerializerInternalWriter.SerializeValue(JsonWriter writer, Object value, JsonContract valueContract, JsonProperty member, JsonContainerContract containerContract, JsonProperty containerProperty)
+                //    bei Newtonsoft.Json.Serialization.JsonSerializerInternalWriter.Serialize(JsonWriter jsonWriter, Object value, Type objectType)
+                //    bei Newtonsoft.Json.JsonSerializer.SerializeInternal(JsonWriter jsonWriter, Object value, Type objectType)
+                //    bei Newtonsoft.Json.JsonSerializer.Serialize(JsonWriter jsonWriter, Object value, Type objectType)
+                //    bei Newtonsoft.Json.JsonConvert.SerializeObjectInternal(Object value, Type type, JsonSerializer jsonSerializer)
+                //    bei Newtonsoft.Json.JsonConvert.SerializeObject(Object value, Type type, JsonSerializerSettings settings)
+                //    bei Newtonsoft.Json.JsonConvert.SerializeObject(Object value, JsonSerializerSettings settings)
+                //    bei Orleans.Persistence.Cassandra.Storage.CassandraGrainStorage.< WriteStateAsync > d__15`1.MoveNext() in .\lib\3rdparty\Orleans.Persistence.Cassandra\src\Orleans.Persistence.Cassandra\Storage\CassandraGrainStorage.cs: Zeile99
+                _jsonSettings.Converters.Clear();
+                _jsonSettings.Converters.Add(new IPAddressConverter());
+                _jsonSettings.Converters.Add(new IPEndPointConverter());
+                _jsonSettings.Converters.Add(new GrainIdConverter());
+                _jsonSettings.Converters.Add(new Serialization.ActivationIdConverter());
+                _jsonSettings.Converters.Add(new SiloAddressJsonConverter());
+                _jsonSettings.Converters.Add(new MembershipVersionJsonConverter());
+                _jsonSettings.Converters.Add(new UniqueKeyConverter());
+                //_jsonSettings.Converters.Add(new GrainReferenceJsonConverter(services.GetRequiredService<GrainReferenceActivator>()));
+                _jsonSettings.Converters.Add(new MyGrainReferenceJsonConverter(_services.GetRequiredService<GrainReferenceActivator>()));
+
 
                 if (_cassandraStorageOptions.JsonSerialization.ContractResolver != null)
                 {
@@ -305,9 +338,18 @@ namespace Orleans.Persistence.Cassandra.Storage
                     _jsonSettings.Formatting = Formatting.Indented;
                 }
 
-                var cassandraOptions = _cassandraStorageOptions;
+                /*
+                var certCollection = new System.Security.Cryptography.X509Certificates.X509Certificate2Collection();
+                var amazoncert = new System.Security.Cryptography.X509Certificates.X509Certificate2("./sf-class2-root.crt");
+                certCollection.Add(amazoncert);
+                */
+
+                 var cassandraOptions = _cassandraStorageOptions;
                 _cluster = Cluster.Builder()
                                   .AddContactPoints(cassandraOptions.ContactPoints.Split(','))
+                                  //.WithPort(9142)
+                                  //.WithAuthProvider(new PlainTextAuthProvider("user", "password"))
+                                  //.WithSSL(new SSLOptions().SetCertificateCollection(certCollection))
                                   .Build();
 
                 var session = await _cluster.ConnectAsync();
@@ -355,7 +397,7 @@ namespace Orleans.Persistence.Cassandra.Storage
             }
         }
 
-        private async Task Close(CancellationToken cancellationToken) => await _cluster.ShutdownAsync();
+        private async Task Close(CancellationToken _) => await _cluster.ShutdownAsync();
     }
 
     public static class CassandraGrainStorageFactory
@@ -364,7 +406,7 @@ namespace Orleans.Persistence.Cassandra.Storage
         {
             var optionsSnapshot = services.GetRequiredService<IOptionsSnapshot<CassandraStorageOptions>>();
             var typesProvider = services.GetRequiredServiceByName<IConcurrentGrainStateTypesProvider>(name);
-            return ActivatorUtilities.CreateInstance<CassandraGrainStorage>(services, name, optionsSnapshot.Get(name), typesProvider);
+            return ActivatorUtilities.CreateInstance<CassandraGrainStorage>(services, name, optionsSnapshot.Get(name), typesProvider, services);
         }
     }
 }
